@@ -51,7 +51,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <AP_HAL/utility/getopt_cpp.h>
-#include <AP_SerialManager/AP_SerialManager.h>
 
 class ReplayVehicle {
 public:
@@ -142,6 +141,7 @@ private:
     uint16_t downsample = 0;
     bool logmatch = false;
     uint32_t output_counter = 0;
+    uint64_t last_timestamp = 0;
 
     struct {
         float max_roll_error;
@@ -176,6 +176,9 @@ private:
     bool parse_param_line(char *line, char **vname, float &value);
     void load_param_file(const char *filename);
     void set_signal_handlers(void);
+    void flush_and_exit();
+
+    FILE *xfopen(const char *f, const char *mode);
 };
 
 enum {

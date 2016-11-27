@@ -151,6 +151,14 @@
  # define RANGEFINDER_TILT_CORRECTION ENABLED
 #endif
 
+#ifndef RANGEFINDER_GLITCH_ALT_CM
+ # define RANGEFINDER_GLITCH_ALT_CM  200      // amount of rangefinder change to be considered a glitch
+#endif
+
+#ifndef RANGEFINDER_GLITCH_NUM_SAMPLES
+ # define RANGEFINDER_GLITCH_NUM_SAMPLES  3   // number of rangefinder glitches in a row to take new reading
+#endif
+
 //////////////////////////////////////////////////////////////////////////////
 // Proximity sensor
 //
@@ -296,9 +304,9 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-//	EPM cargo gripper
-#ifndef EPM_ENABLED
- # define EPM_ENABLED ENABLED
+//	gripper
+#ifndef GRIPPER_ENABLED
+ # define GRIPPER_ENABLED ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -447,7 +455,7 @@
 #endif
 
 #ifndef ACRO_Y_EXPO_DEFAULT
- #define ACRO_Y_EXPO_DEFAULT        0.3f
+ #define ACRO_Y_EXPO_DEFAULT        0.0f
 #endif
 
 #ifndef ACRO_THR_MID_DEFAULT

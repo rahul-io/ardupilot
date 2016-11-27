@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <dirent.h>
+#include <GCS_MAVLink/GCS.h>
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -100,7 +101,7 @@ void DataFlash_File::Init()
     // try to cope with an existing lowercase log directory
     // name. NuttX does not handle case insensitive VFAT well
     DIR *d = opendir("/fs/microsd/APM");
-    if (d != NULL) {
+    if (d != nullptr) {
         for (struct dirent *de=readdir(d); de; de=readdir(d)) {
             if (strcmp(de->d_name, "logs") == 0) {
                 rename("/fs/microsd/APM/logs", "/fs/microsd/APM/OLDLOGS");
@@ -112,7 +113,7 @@ void DataFlash_File::Init()
 #endif
 
     const char* custom_dir = hal.util->get_custom_log_directory();
-    if (custom_dir != NULL){
+    if (custom_dir != nullptr){
         _log_directory = custom_dir;
     }
 
@@ -154,7 +155,7 @@ void DataFlash_File::Init()
 bool DataFlash_File::file_exists(const char *filename) const
 {
 #if DATAFLASH_FILE_MINIMAL
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY|O_CLOEXEC);
     if (fd == -1) {
         return false;
     }
@@ -173,13 +174,25 @@ bool DataFlash_File::file_exists(const char *filename) const
 bool DataFlash_File::log_exists(const uint16_t lognum) const
 {
     char *filename = _log_file_name(lognum);
-    if (filename == NULL) {
+    if (filename == nullptr) {
         // internal_error();
         return false; // ?!
     }
     bool ret = file_exists(filename);
     free(filename);
     return ret;
+}
+
+void DataFlash_File::periodic_1Hz(const uint32_t now)
+{
+    if (!io_thread_alive()) {
+        GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL, "No IO Thread Heartbeat");
+        // If you try to close the file here then it will almost
+        // certainly block.  Since this is the main thread, this is
+        // likely to cause a crash.
+        _write_fd = -1;
+        _initialised = false;
+    }
 }
 
 void DataFlash_File::periodic_fullrate(const uint32_t now)
@@ -272,7 +285,7 @@ uint16_t DataFlash_File::find_oldest_log()
     // relying on the min_avail_space_percent feature we could end up
     // doing a *lot* of asprintf()s and stat()s
     DIR *d = opendir(_log_directory);
-    if (d == NULL) {
+    if (d == nullptr) {
         // internal_error();
         return 0;
     }
@@ -289,7 +302,7 @@ uint16_t DataFlash_File::find_oldest_log()
             continue;
         }
 
-        uint16_t thisnum = strtoul(de->d_name, NULL, 10);
+        uint16_t thisnum = strtoul(de->d_name, nullptr, 10);
         if (thisnum > MAX_LOG_FILES) {
             // ignore files above our official maximum...
             continue;
@@ -348,7 +361,7 @@ void DataFlash_File::Prep_MinSpace()
             break;
         }
         char *filename_to_remove = _log_file_name(log_to_remove);
-        if (filename_to_remove == NULL) {
+        if (filename_to_remove == nullptr) {
             // internal_error();
             break;
         }
@@ -408,9 +421,9 @@ bool DataFlash_File::NeedPrep()
  */
 char *DataFlash_File::_log_file_name(const uint16_t log_num) const
 {
-    char *buf = NULL;
+    char *buf = nullptr;
     if (asprintf(&buf, "%s/%u.BIN", _log_directory, (unsigned)log_num) == 0) {
-        return NULL;
+        return nullptr;
     }
     return buf;
 }
@@ -421,9 +434,9 @@ char *DataFlash_File::_log_file_name(const uint16_t log_num) const
  */
 char *DataFlash_File::_lastlog_file_name(void) const
 {
-    char *buf = NULL;
+    char *buf = nullptr;
     if (asprintf(&buf, "%s/LASTLOG.TXT", _log_directory) == 0) {
-        return NULL;
+        return nullptr;
     }
     return buf;
 }
@@ -438,14 +451,14 @@ void DataFlash_File::EraseAll()
 #if !DATAFLASH_FILE_MINIMAL
     for (log_num=1; log_num<=MAX_LOG_FILES; log_num++) {
         char *fname = _log_file_name(log_num);
-        if (fname == NULL) {
+        if (fname == nullptr) {
             break;
         }
         unlink(fname);
         free(fname);
     }
     char *fname = _lastlog_file_name();
-    if (fname != NULL) {
+    if (fname != nullptr) {
         unlink(fname);
         free(fname);
     }
@@ -533,10 +546,10 @@ uint16_t DataFlash_File::find_last_log()
 {
     unsigned ret = 0;
     char *fname = _lastlog_file_name();
-    if (fname == NULL) {
+    if (fname == nullptr) {
         return ret;
     }
-    int fd = open(fname, O_RDONLY);
+    int fd = open(fname, O_RDONLY|O_CLOEXEC);
     free(fname);
     if (fd != -1) {
         char buf[10];
@@ -555,7 +568,7 @@ uint32_t DataFlash_File::_get_log_size(const uint16_t log_num) const
     return 1;
 #else
     char *fname = _log_file_name(log_num);
-    if (fname == NULL) {
+    if (fname == nullptr) {
         return 0;
     }
     struct stat st;
@@ -574,7 +587,7 @@ uint32_t DataFlash_File::_get_log_time(const uint16_t log_num) const
     return 0;
 #else
     char *fname = _log_file_name(log_num);
-    if (fname == NULL) {
+    if (fname == nullptr) {
         return 0;
     }
     struct stat st;
@@ -647,11 +660,11 @@ int16_t DataFlash_File::get_log_data(const uint16_t list_entry, const uint16_t p
     }
     if (_read_fd == -1) {
         char *fname = _log_file_name(log_num);
-        if (fname == NULL) {
+        if (fname == nullptr) {
             return -1;
         }
         stop_logging();
-        _read_fd = ::open(fname, O_RDONLY);
+        _read_fd = ::open(fname, O_RDONLY|O_CLOEXEC);
         if (_read_fd == -1) {
             _open_error = true;
             int saved_errno = errno;
@@ -801,10 +814,10 @@ uint16_t DataFlash_File::start_new_log(void)
         log_num = 1;
     }
     char *fname = _log_file_name(log_num);
-    if (fname == NULL) {
+    if (fname == nullptr) {
         return 0xFFFF;
     }
-    _write_fd = ::open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+    _write_fd = ::open(fname, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666);
     _cached_oldest_log = 0;
 
     if (_write_fd == -1) {
@@ -828,7 +841,7 @@ uint16_t DataFlash_File::start_new_log(void)
 
     // we avoid fopen()/fprintf() here as it is not available on as many
     // systems as open/write (specifically the QURT RTOS)
-    int fd = open(fname, O_WRONLY|O_CREAT, 0644);
+    int fd = open(fname, O_WRONLY|O_CREAT|O_CLOEXEC, 0644);
     free(fname);
     if (fd == -1) {
         return 0xFFFF;
@@ -870,10 +883,10 @@ void DataFlash_File::LogReadProcess(const uint16_t list_entry,
         _read_fd = -1;
     }
     char *fname = _log_file_name(log_num);
-    if (fname == NULL) {
+    if (fname == nullptr) {
         return;
     }
-    _read_fd = ::open(fname, O_RDONLY);
+    _read_fd = ::open(fname, O_RDONLY|O_CLOEXEC);
     free(fname);
     if (_read_fd == -1) {
         return;
@@ -974,7 +987,7 @@ void DataFlash_File::ListAvailableLogs(AP_HAL::BetterStream *port)
     for (uint16_t i=1; i<=num_logs; i++) {
         uint16_t log_num = _log_num_from_list_entry(i);
         char *filename = _log_file_name(log_num);
-        if (filename != NULL) {
+        if (filename != nullptr) {
                 struct stat st;
                 if (stat(filename, &st) == 0) {
                     struct tm *tm = gmtime(&st.st_mtime);
@@ -998,13 +1011,13 @@ void DataFlash_File::ListAvailableLogs(AP_HAL::BetterStream *port)
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL || CONFIG_HAL_BOARD == HAL_BOARD_LINUX
 void DataFlash_File::flush(void)
 {
-    uint32_t tnow = AP_HAL::micros();
+    uint32_t tnow = AP_HAL::millis();
     hal.scheduler->suspend_timer_procs();
     while (_write_fd != -1 && _initialised && !_open_error && _writebuf.available()) {
         // convince the IO timer that it really is OK to write out
         // less than _writebuf_chunk bytes:
-        if (tnow > 2000001) { // avoid resetting _last_write_time to 0
-            _last_write_time = tnow - 2000001;
+        if (tnow > 2001) { // avoid resetting _last_write_time to 0
+            _last_write_time = tnow - 2001;
         }
         _io_timer();
     }
@@ -1017,6 +1030,8 @@ void DataFlash_File::flush(void)
 
 void DataFlash_File::_io_timer(void)
 {
+    uint32_t tnow = AP_HAL::millis();
+    _io_timer_heartbeat = tnow;
     if (_write_fd == -1 || !_initialised || _open_error) {
         return;
     }
@@ -1025,9 +1040,8 @@ void DataFlash_File::_io_timer(void)
     if (nbytes == 0) {
         return;
     }
-    uint32_t tnow = AP_HAL::micros();
     if (nbytes < _writebuf_chunk && 
-        tnow - _last_write_time < 2000000UL) {
+        tnow - _last_write_time < 2000UL) {
         // write in _writebuf_chunk-sized chunks, but always write at
         // least once per 2 seconds if data is available
         return;
@@ -1094,6 +1108,13 @@ bool DataFlash_File::logging_enabled() const
     return false;
 }
 
+bool DataFlash_File::io_thread_alive() const
+{
+    uint32_t tnow = AP_HAL::millis();
+    // if the io thread hasn't had a heartbeat in a full second then it is dead
+    return _io_timer_heartbeat + 1000 > tnow;
+}
+
 bool DataFlash_File::logging_failed() const
 {
     if (_write_fd == -1 &&
@@ -1104,8 +1125,24 @@ bool DataFlash_File::logging_failed() const
     if (_open_error) {
         return true;
     }
+    if (!io_thread_alive()) {
+        // No heartbeat in a second.  IO thread is dead?! Very Not
+        // Good.
+        return true;
+    }
+
     return false;
 }
 
+
+void DataFlash_File::vehicle_was_disarmed()
+{
+    if (_front._params.file_disarm_rot) {
+        // rotate our log.  Closing the current one and letting the
+        // logging restart naturally based on log_disarmed should do
+        // the trick:
+        stop_logging();
+    }
+}
 
 #endif // HAL_OS_POSIX_IO

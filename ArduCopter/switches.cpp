@@ -114,6 +114,16 @@ uint8_t Copter::read_3pos_switch(int16_t radio_in)
     return AUX_SWITCH_MIDDLE;                                       // switch is in middle position
 }
 
+// can't take reference to a bitfield member, thus a #define:
+#define read_aux_switch(rc, flag, option)                           \
+    do {                                                            \
+        switch_position = read_3pos_switch(rc.get_radio_in());      \
+        if (flag != switch_position) {                              \
+            flag = switch_position;                                 \
+            do_aux_switch_function(option, flag);                   \
+        }                                                           \
+    } while (false)
+
 // read_aux_switches - checks aux switch positions and invokes configured actions
 void Copter::read_aux_switches()
 {
@@ -124,68 +134,18 @@ void Copter::read_aux_switches()
         return;
     }
 
-    // check if ch7 switch has changed position
-    switch_position = read_3pos_switch(g.rc_7.get_radio_in());
-    if (aux_con.CH7_flag != switch_position) {
-        // set the CH7 flag
-        aux_con.CH7_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch7_option, aux_con.CH7_flag);
-    }
-
-    // check if Ch8 switch has changed position
-    switch_position = read_3pos_switch(g.rc_8.get_radio_in());
-    if (aux_con.CH8_flag != switch_position) {
-        // set the CH8 flag
-        aux_con.CH8_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch8_option, aux_con.CH8_flag);
-    }
-
-    // check if Ch9 switch has changed position
-    switch_position = read_3pos_switch(g.rc_9.get_radio_in());
-    if (aux_con.CH9_flag != switch_position) {
-        // set the CH9 flag
-        aux_con.CH9_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch9_option, aux_con.CH9_flag);
-    }
-
-    // check if Ch10 switch has changed position
-    switch_position = read_3pos_switch(g.rc_10.get_radio_in());
-    if (aux_con.CH10_flag != switch_position) {
-        // set the CH10 flag
-        aux_con.CH10_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch10_option, aux_con.CH10_flag);
-    }
-
-    // check if Ch11 switch has changed position
-    switch_position = read_3pos_switch(g.rc_11.get_radio_in());
-    if (aux_con.CH11_flag != switch_position) {
-        // set the CH11 flag
-        aux_con.CH11_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch11_option, aux_con.CH11_flag);
-    }
+    read_aux_switch(g.rc_7, aux_con.CH7_flag, g.ch7_option);
+    read_aux_switch(g.rc_8, aux_con.CH8_flag, g.ch8_option);
+    read_aux_switch(g.rc_9, aux_con.CH9_flag, g.ch9_option);
+    read_aux_switch(g.rc_10, aux_con.CH10_flag, g.ch10_option);
+    read_aux_switch(g.rc_11, aux_con.CH11_flag, g.ch11_option);
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4 || CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
-    // check if Ch12 switch has changed position
-    switch_position = read_3pos_switch(g.rc_12.get_radio_in());
-    if (aux_con.CH12_flag != switch_position) {
-        // set the CH12 flag
-        aux_con.CH12_flag = switch_position;
-
-        // invoke the appropriate function
-        do_aux_switch_function(g.ch12_option, aux_con.CH12_flag);
-    }
+    read_aux_switch(g.rc_12, aux_con.CH12_flag, g.ch12_option);
 #endif
 }
+
+#undef read_aux_switch
 
 // init_aux_switches - invoke configured actions at start-up for aux function where it is safe to do so
 void Copter::init_aux_switches()
@@ -221,7 +181,7 @@ void Copter::init_aux_switch_function(int8_t ch_option, uint8_t ch_flag)
         case AUXSW_FENCE:
         case AUXSW_SUPERSIMPLE_MODE:
         case AUXSW_ACRO_TRAINER:
-        case AUXSW_EPM:
+        case AUXSW_GRIPPER:
         case AUXSW_SPRAYER:
         case AUXSW_PARACHUTE_ENABLE:
         case AUXSW_PARACHUTE_3POS:      // we trust the vehicle will be disarmed so even if switch is in release position the chute will not release
@@ -379,16 +339,16 @@ void Copter::do_aux_switch_function(int8_t ch_function, uint8_t ch_flag)
                     break;
             }
             break;
-#if EPM_ENABLED == ENABLED
-        case AUXSW_EPM:
+#if GRIPPER_ENABLED == ENABLED
+        case AUXSW_GRIPPER:
             switch(ch_flag) {
                 case AUX_SWITCH_LOW:
-                    epm.release();
-                    Log_Write_Event(DATA_EPM_RELEASE);
+                    g2.gripper.release();
+                    Log_Write_Event(DATA_GRIPPER_RELEASE);
                     break;
                 case AUX_SWITCH_HIGH:
-                    epm.grab();
-                    Log_Write_Event(DATA_EPM_GRAB);
+                    g2.gripper.grab();
+                    Log_Write_Event(DATA_GRIPPER_GRAB);
                     break;
             }
             break;
@@ -588,6 +548,20 @@ void Copter::do_aux_switch_function(int8_t ch_function, uint8_t ch_flag)
                 Log_Write_Event(DATA_AVOIDANCE_ADSB_DISABLE);
             }
             break;
+
+        case AUXSW_PRECISION_LOITER:
+#if PRECISION_LANDING == ENABLED
+            switch (ch_flag) {
+                case AUX_SWITCH_HIGH:
+                    set_precision_loiter_enabled(true);
+                    break;
+                case AUX_SWITCH_LOW:
+                    set_precision_loiter_enabled(false);
+                    break;
+            }
+#endif
+            break;
+
     }
 }
 

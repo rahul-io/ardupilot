@@ -134,7 +134,7 @@ static void simulation_timeval(struct timeval *tv)
     static struct timeval first_tv;
     if (first_usec == 0) {
         first_usec = now;
-        gettimeofday(&first_tv, NULL);
+        gettimeofday(&first_tv, nullptr);
     }
     *tv = first_tv;
     tv->tv_sec += now / 1000000ULL;
@@ -522,7 +522,7 @@ uint16_t SITL_State::_gps_nmea_checksum(const char *s)
  */
 void SITL_State::_gps_nmea_printf(const char *fmt, ...)
 {
-    char *s = NULL;
+    char *s = nullptr;
     uint16_t csum;
     char trailer[6];
 
@@ -902,7 +902,7 @@ void SITL_State::_update_gps_file(const struct gps_data *d)
 {
     static int fd = -1;
     if (fd == -1) {
-        fd = open("/tmp/gps.dat", O_RDONLY);
+        fd = open("/tmp/gps.dat", O_RDONLY|O_CLOEXEC);
     }
     if (fd == -1) {
         return;
