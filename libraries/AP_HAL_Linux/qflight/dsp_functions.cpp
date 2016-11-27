@@ -129,7 +129,7 @@ static void *mpu_data_ready(void *ctx)
            
     int ret = mpu9x50_get_data(&data);
     if (ret != 0) {
-        return NULL;
+        return nullptr;
     }
     DSPBuffer::IMU::BUF b;
     b.timestamp = data.timestamp;
@@ -163,7 +163,7 @@ static void *mpu_data_ready(void *ctx)
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 static void mpu9250_startup(void)
@@ -172,7 +172,7 @@ static void mpu9250_startup(void)
         if (init_mpu9250() != 0) {
             return;
         }
-        mpu9x50_register_interrupt(65, mpu_data_ready, NULL);
+        mpu9x50_register_interrupt(65, mpu_data_ready, nullptr);
     }
 }
 
@@ -275,7 +275,7 @@ int qflight_UART_open(const char *device, int32_t *_fd)
         return -1;
     }
     struct uartbuf &b = uarts[num_open_uarts];
-    int fd = open(device, O_RDWR | O_NONBLOCK);
+    int fd = open(device, O_RDWR | O_NONBLOCK|O_CLOEXEC);
     if (fd == -1) {
         return -1;
     }

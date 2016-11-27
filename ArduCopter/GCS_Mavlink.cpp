@@ -233,7 +233,7 @@ void NOINLINE Copter::send_vfr_hud(mavlink_channel_t chan)
     mavlink_msg_vfr_hud_send(
         chan,
         gps.ground_speed(),
-        gps.ground_speed(),
+        ahrs.groundspeed(),
         (ahrs.yaw_sensor / 100) % 360,
         (int16_t)(motors.get_throttle() * 100),
         current_loc.alt / 100.0f,
@@ -258,6 +258,43 @@ void NOINLINE Copter::send_rangefinder(mavlink_channel_t chan)
             rangefinder.voltage_mv() * 0.001f);
 }
 #endif
+
+void NOINLINE Copter::send_proximity(mavlink_channel_t chan, uint16_t count_max)
+{
+#if PROXIMITY_ENABLED == ENABLED
+    // return immediately if no proximity sensor is present
+    if (g2.proximity.get_status() == AP_Proximity::Proximity_NotConnected) {
+        return;
+    }
+
+    // return immediately if no tx buffer room to send messages
+    if (count_max == 0) {
+        return;
+    }
+
+    // send at most 8 distances
+    if (count_max > 8) {
+        count_max = 8;
+    }
+
+    // send known distances
+    AP_Proximity::Proximity_Distance_Array dist_array;
+    if (g2.proximity.get_distances(dist_array)) {
+        for (uint8_t i=0; i<count_max; i++) {
+            mavlink_msg_distance_sensor_send(
+                chan,
+                AP_HAL::millis(),               //  time since system boot
+                (uint16_t)(g2.proximity.distance_min() * 100),  // minimum distance the sensor can measure in centimeters
+                (uint16_t)(g2.proximity.distance_max() * 100),  // maximum distance the sensor can measure in centimeters
+                (uint16_t)(dist_array.distance[i] * 100),   // current distance reading (in cm?)
+                MAV_DISTANCE_SENSOR_LASER,      // type from MAV_DISTANCE_SENSOR enum
+                0,                              // onboard ID of the sensor
+                dist_array.orientation[i],      //  direction the sensor faces from MAV_SENSOR_ORIENTATION enum
+                1);                             // Measurement covariance in centimeters, 0 for unknown / invalid readings
+        }
+    }
+#endif
+}
 
 /*
   send RPM packet
@@ -461,6 +498,8 @@ bool GCS_MAVLINK_Copter::try_send_message(enum ap_message id)
         CHECK_PAYLOAD_SIZE(RANGEFINDER);
         copter.send_rangefinder(chan);
 #endif
+        CHECK_PAYLOAD_SIZE(DISTANCE_SENSOR);
+        copter.send_proximity(chan, comm_get_txspace(chan) / (packet_overhead()+9));
         break;
 
     case MSG_RPM:
@@ -842,12 +881,6 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
 #else
         handle_set_mode(msg, FUNCTOR_BIND(&copter, &Copter::gcs_set_mode, bool, uint8_t));
 #endif
-        break;
-    }
-
-    case MAVLINK_MSG_ID_PARAM_REQUEST_READ:         // MAV ID: 20
-    {
-        handle_param_request_read(msg);
         break;
     }
 
@@ -1377,20 +1410,20 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             result = copter.mavlink_motor_test_start(chan, (uint8_t)packet.param1, (uint8_t)packet.param2, (uint16_t)packet.param3, packet.param4);
             break;
 
-#if EPM_ENABLED == ENABLED
+#if GRIPPER_ENABLED == ENABLED
         case MAV_CMD_DO_GRIPPER:
             // param1 : gripper number (ignored)
             // param2 : action (0=release, 1=grab). See GRIPPER_ACTIONS enum.
-            if(!copter.epm.enabled()) {
+            if(!copter.g2.gripper.enabled()) {
                 result = MAV_RESULT_FAILED;
             } else {
                 result = MAV_RESULT_ACCEPTED;
                 switch ((uint8_t)packet.param2) {
                     case GRIPPER_ACTION_RELEASE:
-                        copter.epm.release();
+                        copter.g2.gripper.release();
                         break;
                     case GRIPPER_ACTION_GRAB:
-                        copter.epm.grab();
+                        copter.g2.gripper.grab();
                         break;
                     default:
                         result = MAV_RESULT_FAILED;
@@ -1503,6 +1536,14 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
             }
             break;
         }
+
+        case MAV_CMD_ACCELCAL_VEHICLE_POS:
+            result = MAV_RESULT_FAILED;
+
+            if (copter.ins.get_acal()->gcs_vehicle_position(packet.param1)) {
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
 
         default:
             result = MAV_RESULT_UNSUPPORTED;
@@ -1816,7 +1857,6 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
 
 #if PRECISION_LANDING == ENABLED
     case MAVLINK_MSG_ID_LANDING_TARGET:
-        // configure or release parachute
         result = MAV_RESULT_ACCEPTED;
         copter.precland.handle_msg(msg);
         break;
@@ -1972,10 +2012,9 @@ void GCS_MAVLINK_Copter::handleMessage(mavlink_message_t* msg)
 #endif
         break;
 
-    case MAVLINK_MSG_ID_SETUP_SIGNING:
-        handle_setup_signing(msg);
+    default:
+        handle_common_message(msg);
         break;
-        
     }     // end switch
 } // end handle mavlink
 

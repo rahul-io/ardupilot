@@ -84,7 +84,7 @@ uint16_t SITL_State::_airspeed_sensor(float airspeed)
  */
 uint16_t SITL_State::_ground_sonar(void)
 {
-    float altitude = height_agl();
+    float altitude = _sitl->height_agl;
 
     // sensor position offset in body frame
     Vector3f relPosSensorBF = _sitl->rngfnd_pos_offset;
@@ -154,7 +154,7 @@ void SITL_State::_update_ins(float roll, 	float pitch, 	float yaw,		// Relative 
                              double xAccel, 	double yAccel, 	double zAccel,		// Local to plane
                              float airspeed,	float altitude)
 {
-    if (_ins == NULL) {
+    if (_ins == nullptr) {
         // no inertial sensor in this sketch
         return;
     }

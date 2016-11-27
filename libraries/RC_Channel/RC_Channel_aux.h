@@ -21,7 +21,7 @@ public:
         RC_Channel(ch_out)
     {
         for (uint8_t i=0; i<RC_AUX_MAX_CHANNELS; i++) {
-            if (_aux_channels[i] == NULL) {
+            if (_aux_channels[i] == nullptr) {
                 _aux_channels[i] = this;
                 break;
             }
@@ -59,7 +59,7 @@ public:
         k_flaperon2             = 25,            ///< flaperon, right wing
         k_steering              = 26,            ///< ground steering, used to separate from rudder
         k_parachute_release     = 27,            ///< parachute release
-        k_epm                   = 28,            ///< epm gripper
+        k_gripper               = 28,            ///< gripper
         k_landing_gear_control  = 29,            ///< landing gear controller
         k_engine_run_enable     = 30,            ///< engine kill switch, used for gas airplanes and helicopters
         k_heli_rsc              = 31,            ///< helicopter RSC output
@@ -106,6 +106,9 @@ public:
 
 	// set radio_out for a function channel
 	static void set_radio(Aux_servo_function_t function, int16_t value);
+
+    // get radio_out for *first* channel matching the given function type.
+    static bool get_radio(RC_Channel_aux::Aux_servo_function_t function, int16_t &value);
 
 	// set radio_out for all channels matching the given function type, allow radio_trim to center servo
 	static void set_radio_trimmed(Aux_servo_function_t function, int16_t value);

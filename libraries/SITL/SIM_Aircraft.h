@@ -29,6 +29,8 @@ namespace SITL {
   parent class for all simulator types
  */
 class Aircraft {
+    friend class Gripper_Servo;
+
 public:
     Aircraft(const char *home_str, const char *frame_str);
 
@@ -134,6 +136,11 @@ protected:
     uint8_t rcin_chan_count = 0;
     float rcin[8];
 
+    //Wind Turbulence simulated Data
+    float turbulence_azimuth = 0;
+    float turbulence_horizontal_speed = 0; // m/s
+    float turbulence_vertical_speed =0; // m/s
+
     Vector3f mag_bf; // local earth magnetic field vector in Gauss, earth frame
 
     uint64_t time_now_us;
@@ -161,12 +168,15 @@ protected:
     bool use_smoothing;
     
     AP_Terrain *terrain;
-    float ground_height_difference;
+    float ground_height_difference() const;
 
     const float FEET_TO_METERS = 0.3048f;
     const float KNOTS_TO_METERS_PER_SECOND = 0.51444f;
-    
-    bool on_ground(const Vector3f &pos);
+
+    bool on_ground() const;
+
+    // returns height above ground level in metres
+    float hagl() const; // metres
 
     /* update location from position */
     void update_position(void);

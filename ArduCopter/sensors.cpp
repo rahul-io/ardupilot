@@ -39,6 +39,11 @@ void Copter::read_rangefinder(void)
 #if RANGEFINDER_ENABLED == ENABLED
     rangefinder.update();
 
+    if (rangefinder.num_sensors() > 0 &&
+        should_log(MASK_LOG_CTUN)) {
+        DataFlash.Log_Write_RFND(rangefinder);
+    }
+    
     rangefinder_state.alt_healthy = ((rangefinder.status() == RangeFinder::RangeFinder_Good) && (rangefinder.range_valid_count() >= RANGEFINDER_HEALTH_MAX));
 
     int16_t temp_alt = rangefinder.distance_cm();
@@ -233,11 +238,11 @@ void Copter::accel_cal_update()
 #endif
 }
 
-#if EPM_ENABLED == ENABLED
-// epm update - moves epm pwm output back to neutral after grab or release is completed
-void Copter::epm_update()
+#if GRIPPER_ENABLED == ENABLED
+// gripper update
+void Copter::gripper_update()
 {
-    epm.update();
+    g2.gripper.update();
 }
 #endif
 
@@ -428,4 +433,16 @@ void Copter::update_sensor_status_flags(void)
     // give mask of error flags to Frsky_Telemetry
     frsky_telemetry.update_sensor_status_flags(~control_sensors_health & control_sensors_enabled & control_sensors_present);
 #endif
+}
+
+// init beacons used for non-gps position estimates
+void Copter::init_beacon()
+{
+    g2.beacon.init();
+}
+
+// update beacons
+void Copter::update_beacon()
+{
+    g2.beacon.update();
 }
